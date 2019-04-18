@@ -119,7 +119,7 @@ namespace DotAmf.Serialization
             using (var buffer = new MemoryStream())
             {
                 ReadObject(stream, AmfxWriter.Create(buffer));
-                
+
                 buffer.Position = 0;
 
                 var settings = new XmlReaderSettings
@@ -128,7 +128,7 @@ namespace DotAmf.Serialization
                     IgnoreProcessingInstructions = true,
                     ConformanceLevel = ConformanceLevel.Fragment
                 };
-                
+
                 return ReadObject(XmlReader.Create(buffer, settings));
             }
         }
@@ -196,9 +196,15 @@ namespace DotAmf.Serialization
 
             var context = new SerializationContext(_encodingOptions.AmfVersion) { KnownTypes = _knownTypes };
 
-            return _type.Value.AmfxType == AmfxContent.AmfxDocument
-                ? DeserializePacket(reader, context) //Special case
-                : Deserialize(reader, context);
+            if (_type.Value.AmfxType == AmfxContent.AmfxDocument)
+            {
+                return DeserializePacket(reader, context);
+            }
+            else
+            {
+                //reader.Read();
+                return Deserialize(reader, context);
+            }
         }
 
         /// <summary>
@@ -430,6 +436,10 @@ namespace DotAmf.Serialization
         {
             if (reader == null) throw new ArgumentNullException("reader");
             if (context == null) throw new ArgumentNullException("context");
+            if (reader.NodeType == XmlNodeType.None)
+            {
+                reader.Read();
+            }
             if (reader.NodeType != XmlNodeType.Element) throw new XmlException(string.Format("Element node expected, {0} found.", reader.NodeType));
 
             #region Primitive values
@@ -494,7 +504,7 @@ namespace DotAmf.Serialization
                 default:
                     throw new NotSupportedException("Unexpected AMFX type: " + reader.Name);
             }
-            
+
             return value;
             #endregion
         }
@@ -517,14 +527,18 @@ namespace DotAmf.Serialization
         {
             if (reader.AttributeCount > 0)
             {
-                var index = Convert.ToInt32(reader.GetAttribute(AmfxContent.StringId));
-                return context.StringReferences[index];
+                string attr_id = reader.GetAttribute(AmfxContent.StringId);
+                if (!string.IsNullOrEmpty(attr_id))
+                {
+                    var index = Convert.ToInt32(attr_id);
+                    return context.StringReferences[index];
+                }
             }
 
             reader.Read();
             var text = reader.ReadContentAsString();
             context.StringReferences.Add(text);
-            
+
             return text;
         }
 
@@ -555,21 +569,20 @@ namespace DotAmf.Serialization
         private static object ReadReference(XmlReader reader, SerializationContext context)
         {
             var index = Convert.ToInt32(reader.GetAttribute(AmfxContent.ReferenceId));
-            return context.References[index+1].Reference;
+            return context.References[index].Reference;
         }
 
         private static object ReadArray(XmlReader reader, SerializationContext context)
         {
             var length = Convert.ToInt32(reader.GetAttribute(AmfxContent.ArrayLength));
-
             var result = new object[length];
             context.References.Add(new AmfReference { Reference = result, AmfxType = AmfxContent.Array });
+
+            if (length == 0) return result;
 
             var referenceIndex = context.References.Count - 1;
 
             reader.Read();
-
-            if (length == 0) return result;
 
             for (var i = 0; i < length; i++)
             {
@@ -644,7 +657,6 @@ namespace DotAmf.Serialization
             {
                 var index = Convert.ToInt32(reader.GetAttribute(AmfxContent.TraitsId));
                 traits = context.TraitsReferences[index];
-                reader.Read();
                 reader.Read();
             }
 
@@ -781,12 +793,12 @@ namespace DotAmf.Serialization
                     break;
 
                 case AmfxContent.Integer:
-                {
-                    WriteElement(writer, amfxtype, type.IsEnum 
-                        ? GetEnumValue(context, type, value).ToString() 
-                        : value.ToString());
-                    break;
-                }
+                    {
+                        WriteElement(writer, amfxtype, type.IsEnum
+                            ? GetEnumValue(context, type, value).ToString()
+                            : value.ToString());
+                        break;
+                    }
 
                 case AmfxContent.Double:
                     WriteElement(writer, amfxtype, value.ToString());
@@ -1238,7 +1250,7 @@ namespace DotAmf.Serialization
 
             var typecode = Type.GetTypeCode(type);
 
-            switch(typecode)
+            switch (typecode)
             {
                 //A boolean value
                 case TypeCode.Boolean:

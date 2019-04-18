@@ -60,6 +60,7 @@
     <EmbeddedResource Include="Errors.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Errors.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Samples\String1.amf" />
     <EmbeddedResource Include="Samples\String1.amfx" />
